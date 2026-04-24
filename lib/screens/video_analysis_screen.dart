@@ -858,14 +858,18 @@ class _ImportResultPreview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      constraints: const BoxConstraints(maxHeight: 450),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.blueGrey.withOpacity(0.15),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.blueGrey.withOpacity(0.3)),
       ),
-      child: Column(
-        children: [
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -922,6 +926,7 @@ class _ImportResultPreview extends StatelessWidget {
           ),
         ],
       ),
-    );
+    ),
+  );
   }
 }
