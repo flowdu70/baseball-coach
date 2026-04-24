@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dart:math';
 
 /// Visualisation 2D simplifiée de la trajectoire vue de dessus
 class TrajectoryPainter extends CustomPainter {
