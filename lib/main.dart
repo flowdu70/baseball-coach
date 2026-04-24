@@ -8,7 +8,6 @@ import 'package:ffmpeg_kit_flutter/ffmpeg_kit.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await FFmpegKit.init();
   await DatabaseService.instance.init();
   runApp(const BaseballCoachApp());
 }
