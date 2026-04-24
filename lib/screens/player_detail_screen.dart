@@ -211,9 +211,9 @@ class _StatsTab extends StatelessWidget {
               margin: const EdgeInsets.symmetric(vertical: 4),
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.white05,
+                color: Colors.white.withOpacity(0.05),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white10),
+                border: Border.all(color: Colors.white.withOpacity(0.10)),
               ),
               child: Row(
                 children: [
@@ -235,7 +235,7 @@ class _StatsTab extends StatelessWidget {
                       child: LinearProgressIndicator(
                         value: e.value / throws.length,
                         minHeight: 6,
-                        backgroundColor: Colors.white15,
+                        backgroundColor: Colors.white.withOpacity(0.15),
                         valueColor: AlwaysStoppedAnimation<Color>(
                           Theme.of(context).colorScheme.secondary,
                         ),

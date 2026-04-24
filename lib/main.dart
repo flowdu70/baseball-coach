@@ -54,7 +54,7 @@ class BaseballCoachApp extends StatelessWidget {
           ),
           inputDecorationTheme: InputDecorationTheme(
             filled: true,
-            fillColor: Colors.white08,
+            fillColor: Colors.white.withOpacity(0.08),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           ),
@@ -63,7 +63,7 @@ class BaseballCoachApp extends StatelessWidget {
             thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
             overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
             activeTrackColor: const Color(0xFFFF6F00),
-            inactiveTrackColor: Colors.white10,
+            inactiveTrackColor: Colors.white.withOpacity(0.10),
           ),
         ),
         home: const HomeScreen(),

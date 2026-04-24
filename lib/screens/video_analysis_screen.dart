@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
+import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
@@ -227,20 +228,6 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
       ),
     );
   }
-
-  Widget _buildBody() {
-    if (_isImported || _cameraController == null || !_cameraController!.value.isInitialized) {
-      return _buildImportPlaceholder();
-    }
-    return _buildCameraView();
-  }
-
-  // ── Import placeholder ──
-  Widget _buildImportPlaceholder() {
-    final hasResult = _result != null;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -268,10 +255,15 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
               style: TextStyle(color: Colors.white54, height: 1.4),
             ),
             const SizedBox(height: 32),
-            _PrimaryButton(
-              icon: Icons.folder_open,
-              label: 'Choisir une vidéo',
-              onTap: _importVideo,
+            FilledButton.icon(
+              onPressed: _importVideo,
+              icon: const Icon(Icons.folder_open),
+              label: const Text('Choisir une vidéo'),
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.blueAccent,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+              ),
             ),
             if (hasResult) ...[
               const SizedBox(height: 28),
@@ -534,7 +526,7 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
-                    color: Colors.white10,
+                    color: Colors.white.withOpacity(0.10),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
@@ -708,7 +700,7 @@ class _ChoiceChipItem extends StatelessWidget {
         decoration: BoxDecoration(
           color: selected
               ? Theme.of(context).colorScheme.primary
-              : Colors.white10,
+              : Colors.white.withOpacity(0.10),
           border: Border.all(
             color: selected ? Theme.of(context).colorScheme.primary : Colors.white24,
           ),
