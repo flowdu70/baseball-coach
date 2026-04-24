@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import '../services/video_analysis_service.dart';
+import '../services/camera_capability_service.dart';
 import '../services/physics_service.dart';
 import '../models/throw_record.dart';
 import '../providers/throw_provider.dart';
@@ -27,10 +28,10 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
   VideoAnalysisResult? _result;
   String? _errorMessage;
   String? _videoPath;
+  CameraCapability? _capability;
 
   // Calibration : pixels pour 1 mètre (ajustable par l'utilisateur)
   double _calibrationPx = 50.0;
-  double _fps = 120.0;
   bool _calibrating = false;
 
   @override
@@ -64,15 +65,12 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
       orElse: () => _cameras.first,
     );
 
-    _cameraController = CameraController(
-      back,
-      ResolutionPreset.high,
-      enableAudio: false,
-      imageFormatGroup: ImageFormatGroup.jpeg,
-    );
-
     try {
-      await _cameraController!.initialize();
+      // Détecte automatiquement le FPS le plus élevé disponible
+      final target = await CameraCapabilityService.detectBestCapability(back);
+      final result = await CameraCapabilityService.buildController(back, target);
+      _cameraController = result.controller;
+      _capability = result.capability;
       if (mounted) setState(() {});
     } catch (e) {
       setState(() {
@@ -113,7 +111,7 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
     try {
       final result = await VideoAnalysisService.analyze(
         videoPath: path,
-        fps: _fps,
+        fps: _capability?.fps ?? 30.0,
         calibrationPx: _calibrationPx,
       );
       setState(() {
@@ -284,7 +282,7 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
                   ),
                 ),
 
-              // Label FPS
+              // Label FPS + slo-mo
               Positioned(
                 top: 12,
                 left: 12,
@@ -292,12 +290,26 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: Colors.black54,
+                    color: _capability?.isSlowMotion == true
+                        ? Colors.blue.withOpacity(0.7)
+                        : Colors.black54,
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Text(
-                    '${_fps.toInt()} fps',
-                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_capability?.isSlowMotion == true)
+                        const Padding(
+                          padding: EdgeInsets.only(right: 4),
+                          child: Icon(Icons.slow_motion_video,
+                              color: Colors.white, size: 12),
+                        ),
+                      Text(
+                        _capability?.label ?? 'Détection…',
+                        style:
+                            const TextStyle(color: Colors.white, fontSize: 12),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -506,25 +518,36 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
             children: [
               Text('Paramètres d\'analyse',
                   style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 16),
+              const SizedBox(height: 8),
 
-              // FPS
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('FPS de la vidéo'),
-                  DropdownButton<double>(
-                    value: _fps,
-                    items: [30.0, 60.0, 120.0, 240.0]
-                        .map((v) => DropdownMenuItem(
-                            value: v, child: Text('${v.toInt()} fps')))
-                        .toList(),
-                    onChanged: (v) {
-                      setSheetState(() => _fps = v!);
-                      setState(() => _fps = v!);
-                    },
-                  ),
-                ],
+              // FPS détecté (lecture seule)
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.white10,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      _capability?.isSlowMotion == true
+                          ? Icons.slow_motion_video
+                          : Icons.videocam,
+                      size: 16,
+                      color: _capability?.isSlowMotion == true
+                          ? Colors.blue
+                          : Colors.white54,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _capability?.label ?? 'Détection en cours…',
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                    ),
+                    const Text('Auto', style: TextStyle(color: Colors.white38, fontSize: 12)),
+                  ],
+                ),
               ),
 
               const SizedBox(height: 12),
