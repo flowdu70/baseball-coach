@@ -4,9 +4,11 @@ import 'screens/home_screen.dart';
 import 'providers/player_provider.dart';
 import 'providers/throw_provider.dart';
 import 'services/database_service.dart';
+import 'package:ffmpeg_kit_flutter/ffmpeg_kit.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await FFmpegKit.init();
   await DatabaseService.instance.init();
   runApp(const BaseballCoachApp());
 }

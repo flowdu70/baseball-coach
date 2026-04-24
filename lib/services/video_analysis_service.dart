@@ -1,6 +1,10 @@
 import 'dart:io';
 import 'dart:math';
 import 'package:image/image.dart' as img;
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:ffmpeg_kit_flutter/ffmpeg_kit.dart';
+import 'package:ffmpeg_kit_flutter/return_code.dart';
 
 /// Résultat de l'analyse vidéo
 class VideoAnalysisResult {
@@ -88,22 +92,57 @@ class VideoAnalysisService {
   }
 
   // ─── Extraction de frames ────────────────────────────────────────────────────
-  // En production, on utiliserait ffmpeg ou camera plugin pour extraire les frames.
-  // Ici on simule l'extraction depuis les métadonnées du fichier vidéo.
-  static Future<List<img.Image>> _extractKeyFrames(String path, double fps) async {
+  // Utilise ffmpeg pour extraire des frames à intervalle régulier selon le FPS cible
+  static Future<List<img.Image>> _extractKeyFrames(String path, double targetFps) async {
     final file = File(path);
     if (!await file.exists()) return [];
 
-    // Limite à 60 frames pour la performance
-    final bytes = await file.readAsBytes();
-    final decoded = img.decodeImage(bytes);
-    if (decoded == null) return [];
+    // Créer un dossier temporaire pour les frames
+    final tempDir = await getTemporaryDirectory();
+    if (tempDir == null) return [];
+    final outputPattern = p.join(tempDir.path, 'frame_%04d.png');
 
-    // Simule plusieurs frames décalées (en prod, on extrait vraiment les frames)
-    return List.generate(
-      min(30, (fps * 0.5).round()),
-      (i) => decoded,
-    );
+    // Calculer le fps d'extraction: on extrait au fps cible (max 30 pour la performance)
+    final extractFps = min(targetFps, 30).round();
+
+    // Commande ffmpeg: extraire 1 frame toutes les 1/extractFps secondes
+    // -hide_banner -loglevel error pour réduire les logs
+    final command = [
+      '-i', path,
+      '-vf', 'fps=$extractFps',
+      outputPattern,
+      '-hide_banner',
+      '-loglevel', 'error',
+    ];
+
+    final session = await FFmpegKit.executeWithArguments(command);
+    final returnCode = await session.getReturnCode();
+
+    if (!ReturnCode.isSuccess(returnCode)) {
+      return [];
+    }
+
+    // Lister et trier les frames générées
+    final files = tempDir
+        .listSync()
+        .where((f) => f is File && p.basename(f.path).startsWith('frame_') && p.extension(f.path) == '.png')
+        .cast<File>()
+        .toList();
+    files.sort((a, b) => p.basename(a.path).compareTo(p.basename(b.path)));
+
+    // Limiter à 60 frames max pour la performance
+    final limited = files.take(60);
+
+    final frames = <img.Image>[];
+    for (final f in limited) {
+      final bytes = await f.readAsBytes();
+      final decoded = img.decodeImage(bytes);
+      if (decoded != null) frames.add(decoded);
+      // Nettoyer
+      await f.delete();
+    }
+
+    return frames;
   }
 
   // ─── Détection de la balle (cercle blanc/beige dans l'image) ─────────────────
