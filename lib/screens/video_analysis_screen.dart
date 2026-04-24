@@ -26,7 +26,6 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
   AnalysisState _state = AnalysisState.idle;
   VideoAnalysisResult? _result;
   String? _errorMessage;
-  String? _videoPath;
   CameraCapability? _capability;
 
   // Calibration : pixels pour 1 mètre (ajustable par l'utilisateur)
@@ -95,7 +94,6 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
 
     try {
       final xFile = await _cameraController!.stopVideoRecording();
-      _videoPath = xFile.path;
       await _analyzeVideo(xFile.path);
     } catch (e) {
       setState(() {
@@ -172,7 +170,6 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
       _state = AnalysisState.idle;
       _result = null;
       _errorMessage = null;
-      _videoPath = null;
     });
   }
 
