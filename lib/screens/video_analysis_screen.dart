@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import '../services/video_analysis_service.dart';
 import '../services/camera_capability_service.dart';
+import '../services/video_importer_service.dart';
 import '../services/physics_service.dart';
 import '../models/throw_record.dart';
 import '../providers/throw_provider.dart';
@@ -30,6 +31,9 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
 
   // Calibration : pixels pour 1 mètre (ajustable par l'utilisateur)
   double _calibrationPx = 50.0;
+  double _fps = 120.0;
+  bool _isImported = false;
+  bool _isImported = false;  // true si vidéo importée
 
   @override
   void initState() {
@@ -105,9 +109,10 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
 
   Future<void> _analyzeVideo(String path) async {
     try {
+      final effectiveFps = _isImported ? _fps : (_capability?.fps ?? 30.0);
       final result = await VideoAnalysisService.analyze(
         videoPath: path,
-        fps: _capability?.fps ?? 30.0,
+        fps: effectiveFps,
         calibrationPx: _calibrationPx,
       );
       setState(() {
@@ -165,11 +170,23 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
     }
   }
 
+  Future<void> _importVideo() async {
+    setState(() => _state = AnalysisState.processing);
+    final path = await VideoImporterService.pickVideo();
+    if (path == null) {
+      setState(() => _state = AnalysisState.idle);
+      return;
+    }
+    _isImported = true;
+    await _analyzeVideo(path);
+  }
+
   void _reset() {
     setState(() {
       _state = AnalysisState.idle;
       _result = null;
       _errorMessage = null;
+      _isImported = false;
     });
   }
 
@@ -211,10 +228,47 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
     }
   }
 
+  Widget _buildImportPlaceholder() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.video_library, size: 80, color: Colors.blue),
+            const SizedBox(height: 20),
+            const Text(
+              'Mode Import vidéo',
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'Sélectionnez une vidéo de lancer dans votre galerie.\nPrivilégiez le slo-mo (120/240fps) pour une meilleure précision.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white54),
+            ),
+            const SizedBox(height: 30),
+            FilledButton.icon(
+              onPressed: _importVideo,
+              icon: const Icon(Icons.folder_open),
+              label: const Text('Choisir une vidéo'),
+            ),
+            if (_result != null) 
+              const SizedBox(height: 20),
+            if (_result != null)
+              _ImportResultPreview(result: _result!),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildCameraView() {
     final controller = _cameraController;
-    if (controller == null || !controller.value.isInitialized) {
-      return const Center(child: CircularProgressIndicator());
+
+    // Mode import : pas de caméra, juste un placeholder
+    if (_isImported || controller == null || !controller.value.isInitialized) {
+      return _buildImportPlaceholder();
     }
 
     final isRecording = _state == AnalysisState.recording;
@@ -277,7 +331,7 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
                   ),
                 ),
 
-              // Label FPS + slo-mo
+              // Label FPS + mode
               Positioned(
                 top: 12,
                 left: 12,
@@ -285,22 +339,31 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: _capability?.isSlowMotion == true
-                        ? Colors.blue.withOpacity(0.7)
-                        : Colors.black54,
+                    color: _isImported ? Colors.orange.withOpacity(0.8) :
+                          (_capability?.isSlowMotion == true
+                              ? Colors.blue.withOpacity(0.7)
+                              : Colors.black54),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      if (_capability?.isSlowMotion == true)
+                      if (_isImported)
+                        const Padding(
+                          padding: EdgeInsets.only(right: 4),
+                          child: Icon(Icons.video_file,
+                              color: Colors.white, size: 12),
+                        ),
+                      if (!_isImported && _capability?.isSlowMotion == true)
                         const Padding(
                           padding: EdgeInsets.only(right: 4),
                           child: Icon(Icons.slow_motion_video,
                               color: Colors.white, size: 12),
                         ),
                       Text(
-                        _capability?.label ?? 'Détection…',
+                        _isImported
+                            ? '${_fps.toInt()} fps (import)'
+                            : (_capability?.label ?? 'Détection…'),
                         style:
                             const TextStyle(color: Colors.white, fontSize: 12),
                       ),
@@ -312,28 +375,27 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
           ),
         ),
 
-        // Bouton enregistrement
+        // Boutons enregistrement + import
         Container(
           padding: const EdgeInsets.symmetric(vertical: 20),
           color: Colors.black,
-          child: Center(
-            child: GestureDetector(
-              onTap: isRecording ? _stopRecording : _startRecording,
-              child: Container(
-                width: 72,
-                height: 72,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 3),
-                  color: isRecording ? Colors.red : Colors.white,
-                ),
-                child: Icon(
-                  isRecording ? Icons.stop : Icons.fiber_manual_record,
-                  color: isRecording ? Colors.white : Colors.red,
-                  size: 36,
-                ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _buildControlButton(
+                icon: isRecording ? Icons.stop : Icons.fiber_manual_record,
+                color: isRecording ? Colors.red : Colors.white,
+                onTap: isRecording ? _stopRecording : _startRecording,
+                label: isRecording ? 'STOP' : 'FILMER',
               ),
-            ),
+              const SizedBox(width: 20),
+              _buildControlButton(
+                icon: Icons.folder_open,
+                color: Colors.blue,
+                onTap: _importVideo,
+                label: 'IMPORTER',
+              ),
+            ],
           ),
         ),
       ],
@@ -513,36 +575,68 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
             children: [
               Text('Paramètres d\'analyse',
                   style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 8),
 
-              // FPS détecté (lecture seule)
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.white10,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      _capability?.isSlowMotion == true
-                          ? Icons.slow_motion_video
-                          : Icons.videocam,
-                      size: 16,
-                      color: _capability?.isSlowMotion == true
-                          ? Colors.blue
-                          : Colors.white54,
+              // Mode source
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: _ChoiceChipWidget(
+                      label: 'Caméra (ralenti)',
+                      selected: !_isImported,
+                      onSelected: (_) {
+                        setSheetState(() => _isImported = false);
+                        setState(() => _isImported = false);
+                      },
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _ChoiceChipWidget(
+                      label: 'Vidéo importée',
+                      selected: _isImported,
+                      onSelected: (_) {
+                        setSheetState(() => _isImported = true);
+                        setState(() => _isImported = true);
+                      },
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 12),
+
+              // FPS
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('FPS de la vidéo'),
+                  if (_isImported)
+                    DropdownButton<double>(
+                      value: _fps,
+                      items: [30.0, 60.0, 120.0, 240.0]
+                          .map((v) => DropdownMenuItem(value: v, child: Text('${v.toInt()} fps')))
+                          .toList(),
+                      onChanged: (v) {
+                        setSheetState(() => _fps = v!);
+                        setState(() => _fps = v!);
+                      },
+                    )
+                  else
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: _capability?.isSlowMotion == true
+                            ? Colors.blue
+                            : Colors.grey,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
                       child: Text(
-                        _capability?.label ?? 'Détection en cours…',
-                        style: const TextStyle(fontSize: 13),
+                        _capability?.label ?? 'Auto',
+                        style: const TextStyle(fontSize: 12),
                       ),
                     ),
-                    const Text('Auto', style: TextStyle(color: Colors.white38, fontSize: 12)),
-                  ],
-                ),
+                ],
               ),
 
               const SizedBox(height: 12),
@@ -620,6 +714,84 @@ class _ResultCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _ChoiceChipWidget extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final ValueChanged<bool> onSelected;
+
+  const _ChoiceChipWidget({
+    required this.label,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => onSelected(!selected),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: selected ? Theme.of(context).colorScheme.primary : Colors.white10,
+          border: Border.all(
+            color: selected ? Theme.of(context).colorScheme.primary : Colors.white24,
+          ),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: selected ? Colors.white : Colors.white70,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ImportResultPreview extends StatelessWidget {
+  final VideoAnalysisResult result;
+
+  const _ImportResultPreview({required this.result});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        const Icon(Icons.check_circle, color: Colors.green, size: 48),
+        const SizedBox(height: 12),
+        _ResultCard(
+          icon: Icons.speed,
+          label: 'Vitesse',
+          value: result.ballSpeedKmh > 0
+              ? "${result.ballSpeedKmh.toStringAsFixed(1)} km/h"
+              : 'Non détectée',
+          color: Colors.orange,
+        ),
+        const SizedBox(height: 8),
+        _ResultCard(
+          icon: Icons.rotate_right,
+          label: 'Vitesse rotation',
+          value: result.rotationSpeedRpm > 0
+              ? "${result.rotationSpeedRpm.toStringAsFixed(0)} tr/min"
+              : 'Non détectée',
+          color: Colors.blue,
+        ),
+        const SizedBox(height: 8),
+        _ResultCard(
+          icon: Icons.architecture,
+          label: 'Angle rotation',
+          value: "${result.rotationAngleDeg.toStringAsFixed(1)}°",
+          color: Colors.green,
+        ),
+      ],
     );
   }
 }
