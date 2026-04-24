@@ -224,7 +224,7 @@ class _ResultCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: theme.colorScheme.primary.withOpacity(0.3),
-          2,
+          width: 2,
         ),
       ),
       child: Padding(

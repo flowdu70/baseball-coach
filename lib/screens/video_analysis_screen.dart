@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:camera/camera.dart';
 import 'package:flutter/services.dart';
+import 'package:camera/camera.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
@@ -17,7 +17,6 @@ enum AnalysisState { idle, recording, processing, done, error }
 
 class VideoAnalysisScreen extends StatefulWidget {
   const VideoAnalysisScreen({super.key});
-
   @override
   State<VideoAnalysisScreen> createState() => _VideoAnalysisScreenState();
 }
@@ -30,16 +29,9 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
   String? _errorMessage;
   CameraCapability? _capability;
 
-  // Calibration
   double _calibrationPx = 50.0;
   double _fps = 120.0;
   bool _isImported = false;
-
-  // Settings sheet state
-  final Set<ChoiceChipData> _modeChips = {
-    const ChoiceChipData(label: 'Caméra', value: false),
-    const ChoiceChipData(label: 'Importer', value: true),
-  };
 
   @override
   void initState() {
@@ -89,6 +81,7 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
     if (_cameraController == null) return;
     await WakelockPlus.enable();
     await _cameraController!.startVideoRecording();
+    HapticFeedback.lightImpact();
     setState(() => _state = AnalysisState.recording);
   }
 
@@ -200,10 +193,8 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
     super.dispose();
   }
 
-  // ── Body ──
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(
         title: const Text('Analyse vidéo'),
@@ -228,6 +219,19 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
       ),
     );
   }
+
+  Widget _buildBody() {
+    if (_isImported || _cameraController == null || !_cameraController!.value.isInitialized) {
+      return _buildImportPlaceholder();
+    }
+    return _buildCameraView();
+  }
+
+  Widget _buildImportPlaceholder() {
+    final hasResult = _result != null;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -275,14 +279,12 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
     );
   }
 
-  // ── Camera view ──
   Widget _buildCameraView() {
     final controller = _cameraController!;
     final isRecording = _state == AnalysisState.recording;
 
     return Column(
       children: [
-        // Instruction bar
         Container(
           width: double.infinity,
           color: Colors.black87,
@@ -300,15 +302,12 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
             ],
           ),
         ),
-
-        // Camera preview
         Expanded(
           child: Stack(
             fit: StackFit.expand,
             children: [
               CameraPreview(controller),
               CustomPaint(painter: _AimGridPainter()),
-              // FPS mode badge
               if (_capability != null)
                 Positioned(
                   top: 12,
@@ -360,8 +359,6 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
             ],
           ),
         ),
-
-        // Controls
         Container(
           padding: const EdgeInsets.symmetric(vertical: 24),
           color: Colors.black87,
@@ -388,7 +385,6 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
     );
   }
 
-  // ── Settings sheet ──
   void _showSettingsSheet() {
     showModalBottomSheet(
       context: context,
@@ -407,25 +403,32 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
               children: [
                 Text('Paramètres', style: Theme.of(context).textTheme.titleLarge),
                 const SizedBox(height: 20),
-
-                // Mode picker
                 Row(
                   children: [
-                    ..._modeChips.map((chip) => Expanded(
-                          child: _ChoiceChipItem(
-                            label: chip.label,
-                            selected: (_isImported == chip.value),
-                            onSelected: (sel) {
-                              setSheetState(() => _isImported = sel);
-                              setState(() => _isImported = sel);
-                            },
-                          ),
-                        )),
+                    Expanded(
+                      child: _ChoiceChipItem(
+                        label: 'Caméra',
+                        selected: !_isImported,
+                        onSelected: (sel) {
+                          setSheetState(() => _isImported = false);
+                          setState(() => _isImported = false);
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _ChoiceChipItem(
+                        label: 'Importer',
+                        selected: _isImported,
+                        onSelected: (sel) {
+                          setSheetState(() => _isImported = true);
+                          setState(() => _isImported = true);
+                        },
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 20),
-
-                // FPS picker
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -445,8 +448,6 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
                   ],
                 ),
                 const SizedBox(height: 12),
-
-                // Calibration
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -485,7 +486,22 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
     );
   }
 
-  // ── Results ──
+  Widget _buildProcessing() {
+    return const Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          CircularProgressIndicator(strokeWidth: 2),
+          SizedBox(height: 20),
+          Text('Analyse en cours…', style: TextStyle(fontSize: 18)),
+          SizedBox(height: 8),
+          Text('Détection de la balle et calcul des paramètres…',
+              style: TextStyle(color: Colors.white54)),
+        ],
+      ),
+    );
+  }
+
   Widget _buildResults() {
     final result = _result!;
     final confidenceColor = result.confidence == 'high'
@@ -526,7 +542,7 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.10),
+                    color: Colors.white10,
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
@@ -619,7 +635,6 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
     );
   }
 
-  // ── Error ──
   Widget _buildError() {
     return Center(
       child: Padding(
@@ -645,82 +660,10 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
       ),
     );
   }
-
-  // ── Body router ──
-  Widget _buildBody() {
-    switch (_state) {
-      case AnalysisState.idle:
-      case AnalysisState.recording:
-        return _buildCameraView();
-      case AnalysisState.processing:
-        return const Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CircularProgressIndicator(strokeWidth: 2),
-              SizedBox(height: 20),
-              Text('Analyse en cours…', style: TextStyle(fontSize: 18)),
-              SizedBox(height: 8),
-              Text('Détection de la balle et calcul des paramètres…',
-                  style: TextStyle(color: Colors.white54)),
-            ],
-          ),
-        );
-      case AnalysisState.done:
-        return _buildResults();
-      case AnalysisState.error:
-        return _buildError();
-    }
-  }
 }
 
-// ── Small choice chip ──
-class ChoiceChipData {
-  final String label;
-  final bool value;
-  const ChoiceChipData({required this.label, required this.value});
-}
+// ── Widgets locaux ─────────────────────────────────────────────────────────────
 
-class _ChoiceChipItem extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final ValueChanged<bool> onSelected;
-  const _ChoiceChipItem({
-    required this.label,
-    required this.selected,
-    required this.onSelected,
-  });
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => onSelected(!selected),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: selected
-              ? Theme.of(context).colorScheme.primary
-              : Colors.white.withOpacity(0.10),
-          border: Border.all(
-            color: selected ? Theme.of(context).colorScheme.primary : Colors.white24,
-          ),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Text(
-          label,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 13,
-            color: selected ? Colors.white : Colors.white70,
-            fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ── Big control button ──
 class _ControlButton extends StatelessWidget {
   final IconData icon;
   final Color color;
@@ -764,7 +707,45 @@ class _ControlButton extends StatelessWidget {
   }
 }
 
-// ── Result card ──
+class _ChoiceChipItem extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final ValueChanged<bool> onSelected;
+  const _ChoiceChipItem({
+    required this.label,
+    required this.selected,
+    required this.onSelected,
+  });
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => onSelected(!selected),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: selected
+              ? Theme.of(context).colorScheme.primary
+              : Colors.white10,
+          border: Border.all(
+            color: selected ? Theme.of(context).colorScheme.primary : Colors.white24,
+          ),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 13,
+            color: selected ? Colors.white : Colors.white70,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ResultCard extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -837,7 +818,6 @@ class _ResultCard extends StatelessWidget {
   }
 }
 
-// ── Aim grid painter ──
 class _AimGridPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
@@ -871,14 +851,12 @@ class _AimGridPainter extends CustomPainter {
   bool shouldRepaint(_AimGridPainter old) => false;
 }
 
-// ── Import result preview ──
 class _ImportResultPreview extends StatelessWidget {
   final VideoAnalysisResult result;
   const _ImportResultPreview({required this.result});
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(

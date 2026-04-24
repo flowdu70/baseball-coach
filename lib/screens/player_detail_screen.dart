@@ -360,5 +360,4 @@ class _AdviceTab extends StatelessWidget {
       },
     );
   }
-  }
 }
