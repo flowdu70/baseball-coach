@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'dart:math';
 import 'package:image/image.dart' as img;
 
@@ -38,9 +37,6 @@ class BallDetection {
 }
 
 class VideoAnalysisService {
-  /// Distance connue monticule → marbre en mètres (18.44m MLB, 14.02m softball)
-  static const double _pitchingDistanceM = 18.44;
-
   /// Analyse une vidéo frame par frame
   /// [videoPath] : chemin local de la vidéo
   /// [fps] : images par seconde de la vidéo (ex: 30, 60, 120, 240)
@@ -303,7 +299,7 @@ class VideoAnalysisService {
         if (dx * dx + dy * dy <= r * r) {
           final px = (cx + dx).clamp(0, frame.width - 1);
           final py = (cy + dy).clamp(0, frame.height - 1);
-          values.add(img.getLuminance(gray.getPixel(px, py)));
+          values.add(img.getLuminance(gray.getPixel(px, py)).toDouble());
         }
       }
     }

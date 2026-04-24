@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -32,7 +31,6 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
 
   // Calibration : pixels pour 1 mètre (ajustable par l'utilisateur)
   double _calibrationPx = 50.0;
-  bool _calibrating = false;
 
   @override
   void initState() {
