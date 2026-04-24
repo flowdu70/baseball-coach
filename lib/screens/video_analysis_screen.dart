@@ -29,11 +29,16 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
   String? _errorMessage;
   CameraCapability? _capability;
 
-  // Calibration : pixels pour 1 mètre (ajustable par l'utilisateur)
+  // Calibration
   double _calibrationPx = 50.0;
   double _fps = 120.0;
   bool _isImported = false;
-  bool _isImported = false;  // true si vidéo importée
+
+  // Settings sheet state
+  final Set<ChoiceChipData> _modeChips = {
+    const ChoiceChipData(label: 'Caméra', value: false),
+    const ChoiceChipData(label: 'Importer', value: true),
+  };
 
   @override
   void initState() {
@@ -60,14 +65,12 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
       return;
     }
 
-    // Choisir la caméra arrière
     final back = _cameras.firstWhere(
       (c) => c.lensDirection == CameraLensDirection.back,
       orElse: () => _cameras.first,
     );
 
     try {
-      // Détecte automatiquement le FPS le plus élevé disponible
       final target = await CameraCapabilityService.detectBestCapability(back);
       final result = await CameraCapabilityService.buildController(back, target);
       _cameraController = result.controller;
@@ -82,9 +85,7 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
   }
 
   Future<void> _startRecording() async {
-    if (_cameraController == null ||
-        !_cameraController!.value.isInitialized) return;
-
+    if (_cameraController == null) return;
     await WakelockPlus.enable();
     await _cameraController!.startVideoRecording();
     setState(() => _state = AnalysisState.recording);
@@ -92,10 +93,8 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
 
   Future<void> _stopRecording() async {
     if (_cameraController == null) return;
-
     setState(() => _state = AnalysisState.processing);
     await WakelockPlus.disable();
-
     try {
       final xFile = await _cameraController!.stopVideoRecording();
       await _analyzeVideo(xFile.path);
@@ -105,6 +104,17 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
         _errorMessage = 'Erreur enregistrement : $e';
       });
     }
+  }
+
+  Future<void> _importVideo() async {
+    setState(() => _state = AnalysisState.processing);
+    final path = await VideoImporterService.pickVideo();
+    if (path == null) {
+      setState(() => _state = AnalysisState.idle);
+      return;
+    }
+    _isImported = true;
+    await _analyzeVideo(path);
   }
 
   Future<void> _analyzeVideo(String path) async {
@@ -133,18 +143,19 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
     if (result == null) return;
     if (player == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Sélectionnez un joueur dans l\'onglet Joueurs')),
+        SnackBar(
+          content: const Text('Sélectionnez un joueur dans l’onglet Joueurs'),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
       );
       return;
     }
-
     final pitch = PhysicsService.calculate(
       rotationAngleDeg: result.rotationAngleDeg,
       rotationSpeedRpm: result.rotationSpeedRpm,
       ballSpeedKmh: result.ballSpeedKmh,
     );
-
     final record = ThrowRecord(
       id: const Uuid().v4(),
       playerId: player.id,
@@ -157,28 +168,19 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
       recordedAt: DateTime.now(),
       notes: 'Analyse vidéo — confiance: ${result.confidence}',
     );
-
     await context.read<ThrowProvider>().addThrow(record);
-
     if (mounted) {
+      HapticFeedback.heavyImpact();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-            content:
-                Text('Lancer enregistré pour ${player.name} (${pitch.pitchType})')),
+          content: Text('✨ Enregistré pour ${player.name} (${pitch.pitchType})'),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          duration: const Duration(seconds: 1),
+        ),
       );
       setState(() => _state = AnalysisState.idle);
     }
-  }
-
-  Future<void> _importVideo() async {
-    setState(() => _state = AnalysisState.processing);
-    final path = await VideoImporterService.pickVideo();
-    if (path == null) {
-      setState(() => _state = AnalysisState.idle);
-      return;
-    }
-    _isImported = true;
-    await _analyzeVideo(path);
   }
 
   void _reset() {
@@ -197,11 +199,14 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
     super.dispose();
   }
 
+  // ── Body ──
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(
         title: const Text('Analyse vidéo'),
+        elevation: 0,
         actions: [
           IconButton(
             icon: const Icon(Icons.tune),
@@ -210,190 +215,179 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
           ),
         ],
       ),
-      body: _buildBody(),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF12121A), Color(0xFF1E1E2E)],
+          ),
+        ),
+        child: _buildBody(),
+      ),
     );
   }
 
   Widget _buildBody() {
-    switch (_state) {
-      case AnalysisState.idle:
-      case AnalysisState.recording:
-        return _buildCameraView();
-      case AnalysisState.processing:
-        return _buildProcessing();
-      case AnalysisState.done:
-        return _buildResults();
-      case AnalysisState.error:
-        return _buildError();
+    if (_isImported || _cameraController == null || !_cameraController!.value.isInitialized) {
+      return _buildImportPlaceholder();
     }
+    return _buildCameraView();
   }
 
+  // ── Import placeholder ──
   Widget _buildImportPlaceholder() {
+    final hasResult = _result != null;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.video_library, size: 80, color: Colors.blue),
-            const SizedBox(height: 20),
+            Container(
+              width: 100,
+              height: 100,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  colors: [Colors.blueAccent, Colors.blue.shade900],
+                ),
+                boxShadow: [BoxShadow(color: Colors.blue.withOpacity(0.3), blurRadius: 20)],
+              ),
+              child: const Icon(Icons.video_library, size: 48, color: Colors.white),
+            ),
+            const SizedBox(height: 28),
             const Text(
               'Mode Import vidéo',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 10),
             const Text(
-              'Sélectionnez une vidéo de lancer dans votre galerie.\nPrivilégiez le slo-mo (120/240fps) pour une meilleure précision.',
+              'Sélectionnez une vidéo de lancer depuis votre galerie.\nLe slo-mo (120fps / 240fps) améliore la précision.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.white54),
+              style: TextStyle(color: Colors.white54, height: 1.4),
             ),
-            const SizedBox(height: 30),
-            FilledButton.icon(
-              onPressed: _importVideo,
-              icon: const Icon(Icons.folder_open),
-              label: const Text('Choisir une vidéo'),
+            const SizedBox(height: 32),
+            _PrimaryButton(
+              icon: Icons.folder_open,
+              label: 'Choisir une vidéo',
+              onTap: _importVideo,
             ),
-            if (_result != null) 
-              const SizedBox(height: 20),
-            if (_result != null)
+            if (hasResult) ...[
+              const SizedBox(height: 28),
               _ImportResultPreview(result: _result!),
+            ],
           ],
         ),
       ),
     );
   }
 
+  // ── Camera view ──
   Widget _buildCameraView() {
-    final controller = _cameraController;
-
-    // Mode import : pas de caméra, juste un placeholder
-    if (_isImported || controller == null || !controller.value.isInitialized) {
-      return _buildImportPlaceholder();
-    }
-
+    final controller = _cameraController!;
     final isRecording = _state == AnalysisState.recording;
 
     return Column(
       children: [
-        // Instructions
+        // Instruction bar
         Container(
+          width: double.infinity,
           color: Colors.black87,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           child: Row(
             children: [
               const Icon(Icons.info_outline, color: Colors.amber, size: 16),
               const SizedBox(width: 8),
-              const Expanded(
+              Expanded(
                 child: Text(
-                  'Filmez de côté, balle dans la moitié supérieure. Commencez juste avant le lancer.',
-                  style: TextStyle(color: Colors.white70, fontSize: 12),
+                  'Filmez de côté. La balle doit rester dans la zone centrale.',
+                  style: const TextStyle(color: Colors.white70, fontSize: 12),
                 ),
               ),
             ],
           ),
         ),
 
-        // Prévisualisation caméra
+        // Camera preview
         Expanded(
           child: Stack(
             fit: StackFit.expand,
             children: [
               CameraPreview(controller),
-
-              // Grille de visée
               CustomPaint(painter: _AimGridPainter()),
-
-              // Indicateur enregistrement
+              // FPS mode badge
+              if (_capability != null)
+                Positioned(
+                  top: 12,
+                  left: 12,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: _capability!.isSlowMotion
+                          ? Colors.blue.withOpacity(0.8)
+                          : Colors.grey.shade800.withOpacity(0.8),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (_capability!.isSlowMotion) ...[
+                          const Icon(Icons.slow_motion_video, size: 12, color: Colors.white),
+                          const SizedBox(width: 4),
+                        ],
+                        Text(
+                          _capability!.label,
+                          style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               if (isRecording)
                 Positioned(
                   top: 12,
                   right: 12,
                   child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
                       color: Colors.red,
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [BoxShadow(color: Colors.red.withOpacity(0.4), blurRadius: 8)],
                     ),
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.fiber_manual_record,
-                            color: Colors.white, size: 10),
+                        Icon(Icons.fiber_manual_record, color: Colors.white, size: 10),
                         SizedBox(width: 4),
-                        Text('REC',
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold)),
+                        Text('REC', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
                       ],
                     ),
                   ),
                 ),
-
-              // Label FPS + mode
-              Positioned(
-                top: 12,
-                left: 12,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: _isImported ? Colors.orange.withOpacity(0.8) :
-                          (_capability?.isSlowMotion == true
-                              ? Colors.blue.withOpacity(0.7)
-                              : Colors.black54),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (_isImported)
-                        const Padding(
-                          padding: EdgeInsets.only(right: 4),
-                          child: Icon(Icons.video_file,
-                              color: Colors.white, size: 12),
-                        ),
-                      if (!_isImported && _capability?.isSlowMotion == true)
-                        const Padding(
-                          padding: EdgeInsets.only(right: 4),
-                          child: Icon(Icons.slow_motion_video,
-                              color: Colors.white, size: 12),
-                        ),
-                      Text(
-                        _isImported
-                            ? '${_fps.toInt()} fps (import)'
-                            : (_capability?.label ?? 'Détection…'),
-                        style:
-                            const TextStyle(color: Colors.white, fontSize: 12),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
             ],
           ),
         ),
 
-        // Boutons enregistrement + import
+        // Controls
         Container(
-          padding: const EdgeInsets.symmetric(vertical: 20),
-          color: Colors.black,
+          padding: const EdgeInsets.symmetric(vertical: 24),
+          color: Colors.black87,
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _buildControlButton(
+              _ControlButton(
                 icon: isRecording ? Icons.stop : Icons.fiber_manual_record,
                 color: isRecording ? Colors.red : Colors.white,
-                onTap: isRecording ? _stopRecording : _startRecording,
                 label: isRecording ? 'STOP' : 'FILMER',
+                onTap: isRecording ? _stopRecording : _startRecording,
               ),
-              const SizedBox(width: 20),
-              _buildControlButton(
-                icon: Icons.folder_open,
+              const SizedBox(width: 28),
+              _ControlButton(
+                icon: Icons.video_library,
                 color: Colors.blue,
-                onTap: _importVideo,
                 label: 'IMPORTER',
+                onTap: _importVideo,
               ),
             ],
           ),
@@ -402,24 +396,104 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
     );
   }
 
-  Widget _buildProcessing() {
-    return const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          CircularProgressIndicator(),
-          SizedBox(height: 20),
-          Text('Analyse en cours…', style: TextStyle(fontSize: 18)),
-          SizedBox(height: 8),
-          Text(
-            'Détection de la balle et calcul des paramètres',
-            style: TextStyle(color: Colors.white54),
+  // ── Settings sheet ──
+  void _showSettingsSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setSheetState) => Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.25),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
           ),
-        ],
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Paramètres', style: Theme.of(context).textTheme.titleLarge),
+                const SizedBox(height: 20),
+
+                // Mode picker
+                Row(
+                  children: [
+                    ..._modeChips.map((chip) => Expanded(
+                          child: _ChoiceChipItem(
+                            label: chip.label,
+                            selected: (_isImported == chip.value),
+                            onSelected: (sel) {
+                              setSheetState(() => _isImported = sel);
+                              setState(() => _isImported = sel);
+                            },
+                          ),
+                        )),
+                  ],
+                ),
+                const SizedBox(height: 20),
+
+                // FPS picker
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('FPS de la vidéo'),
+                    DropdownButton<double>(
+                      value: _fps,
+                      items: [30.0, 60.0, 120.0, 240.0]
+                          .map((v) => DropdownMenuItem(value: v, child: Text('${v.toInt()} fps')))
+                          .toList(),
+                      onChanged: _isImported
+                          ? (v) {
+                              setSheetState(() => _fps = v!);
+                              setState(() => _fps = v!);
+                            }
+                          : null,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                // Calibration
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Calibration (px/m)'),
+                        Text('${_calibrationPx.toInt()} px/m',
+                            style: TextStyle(
+                                color: Theme.of(context).colorScheme.secondary,
+                                fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                    Slider(
+                      value: _calibrationPx,
+                      min: 10,
+                      max: 200,
+                      divisions: 190,
+                      onChanged: (v) {
+                        setSheetState(() => _calibrationPx = v);
+                        setState(() => _calibrationPx = v);
+                      },
+                    ),
+                    const Text(
+                      'Astuce : filme un objet de taille connue et ajuste pour que 1 m = N pixels.',
+                      style: TextStyle(fontSize: 11, color: Colors.white54, height: 1.3),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
 
+  // ── Results ──
   Widget _buildResults() {
     final result = _result!;
     final confidenceColor = result.confidence == 'high'
@@ -427,7 +501,6 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
         : result.confidence == 'medium'
             ? Colors.orange
             : Colors.red;
-
     final confidenceLabel = result.confidence == 'high'
         ? 'Confiance élevée'
         : result.confidence == 'medium'
@@ -435,112 +508,126 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
             : 'Confiance faible';
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Badge confiance
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: BoxDecoration(
               color: confidenceColor.withOpacity(0.15),
-              border: Border.all(color: confidenceColor),
-              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: confidenceColor.withOpacity(0.6)),
+              borderRadius: BorderRadius.circular(12),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.analytics, color: confidenceColor, size: 16),
+                Icon(Icons.analytics, color: confidenceColor, size: 18),
                 const SizedBox(width: 8),
                 Text(confidenceLabel,
                     style: TextStyle(
-                        color: confidenceColor, fontWeight: FontWeight.bold)),
+                        color: confidenceColor,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13)),
                 const SizedBox(width: 8),
-                Text('(${result.detections.length} détections)',
-                    style: TextStyle(color: confidenceColor, fontSize: 12)),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.white10,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    '${result.detections.length} détections',
+                    style: const TextStyle(color: Colors.white60, fontSize: 11),
+                  ),
+                ),
               ],
             ),
           ),
-          const SizedBox(height: 16),
-
-          // Résultats
-          _ResultCard(
-            icon: Icons.speed,
-            label: 'Vitesse de la balle',
-            value: result.ballSpeedKmh > 0
-                ? '${result.ballSpeedKmh.toStringAsFixed(1)} km/h'
-                : '—',
-            color: Colors.orange,
-          ),
-          const SizedBox(height: 12),
-          _ResultCard(
-            icon: Icons.rotate_right,
-            label: 'Vitesse de rotation',
-            value: result.rotationSpeedRpm > 0
-                ? '${result.rotationSpeedRpm.toStringAsFixed(0)} tr/min'
-                : '—',
-            color: Colors.blue,
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              Expanded(
+                child: _ResultCard(
+                  icon: Icons.speed,
+                  label: 'Vitesse',
+                  value: result.ballSpeedKmh > 0
+                      ? '${result.ballSpeedKmh.toStringAsFixed(1)} km/h'
+                      : '—',
+                  color: Colors.orange,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _ResultCard(
+                  icon: Icons.rotate_right,
+                  label: 'Rotation',
+                  value: result.rotationSpeedRpm > 0
+                      ? '${result.rotationSpeedRpm.toStringAsFixed(0)} tr/min'
+                      : '—',
+                  color: Colors.blue,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 12),
           _ResultCard(
             icon: Icons.architecture,
-            label: 'Angle de rotation',
+            label: 'Angle',
             value: '${result.rotationAngleDeg.toStringAsFixed(1)}°',
-            color: Colors.green,
+            color: Colors.greenAccent,
+            fullWidth: true,
           ),
-
-          // Notes / avertissements
           if (result.notes.isNotEmpty) ...[
             const SizedBox(height: 16),
             ...result.notes.map((note) => Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
+                  padding: const EdgeInsets.only(bottom: 8),
                   child: Row(
                     children: [
-                      const Icon(Icons.warning_amber,
-                          size: 16, color: Colors.amber),
+                      const Icon(Icons.info_outline, size: 14, color: Colors.amber),
                       const SizedBox(width: 6),
                       Expanded(
-                        child: Text(note,
-                            style: const TextStyle(
-                                fontSize: 12, color: Colors.white70)),
+                        child: Text(
+                          note,
+                          style: const TextStyle(fontSize: 12, color: Colors.white70, height: 1.3),
+                        ),
                       ),
                     ],
                   ),
                 )),
           ],
-
-          const SizedBox(height: 24),
-
-          // Actions
-          Row(
-            children: [
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: _saveResult,
-                  icon: const Icon(Icons.save),
-                  label: const Text('Enregistrer le lancer'),
-                ),
+          const SizedBox(height: 28),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: _saveResult,
+              icon: const Icon(Icons.save),
+              label: const Text('Enregistrer le lancer'),
+              style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.secondary,
+                foregroundColor: Colors.black,
+                padding: const EdgeInsets.symmetric(vertical: 16),
               ),
-            ],
+            ),
           ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _reset,
-                  icon: const Icon(Icons.videocam),
-                  label: const Text('Nouveau lancer'),
-                ),
-              ),
-            ],
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: _reset,
+            icon: const Icon(Icons.videocam),
+            label: const Text('Nouveau lancer'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.white70,
+              side: const BorderSide(color: Colors.white30),
+              padding: const EdgeInsets.symmetric(vertical: 16),
+            ),
           ),
         ],
       ),
     );
   }
 
+  // ── Error ──
   Widget _buildError() {
     return Center(
       child: Padding(
@@ -548,7 +635,7 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.error_outline, size: 64, color: Colors.red),
+            const Icon(Icons.error_outline, size: 72, color: Colors.red),
             const SizedBox(height: 16),
             Text(
               _errorMessage ?? 'Erreur inconnue',
@@ -556,197 +643,82 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
               style: const TextStyle(fontSize: 16),
             ),
             const SizedBox(height: 24),
-            FilledButton(onPressed: _reset, child: const Text('Réessayer')),
+            FilledButton.icon(
+              onPressed: _reset,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Réessayer'),
+            ),
           ],
         ),
       ),
     );
   }
 
-  void _showSettingsSheet() {
-    showModalBottomSheet(
-      context: context,
-      builder: (_) => StatefulBuilder(
-        builder: (ctx, setSheetState) => Padding(
-          padding: const EdgeInsets.all(20),
+  // ── Body router ──
+  Widget _buildBody() {
+    switch (_state) {
+      case AnalysisState.idle:
+      case AnalysisState.recording:
+        return _buildCameraView();
+      case AnalysisState.processing:
+        return const Center(
           child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text('Paramètres d\'analyse',
-                  style: Theme.of(context).textTheme.titleMedium),
-
-              // Mode source
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: _ChoiceChipWidget(
-                      label: 'Caméra (ralenti)',
-                      selected: !_isImported,
-                      onSelected: (_) {
-                        setSheetState(() => _isImported = false);
-                        setState(() => _isImported = false);
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _ChoiceChipWidget(
-                      label: 'Vidéo importée',
-                      selected: _isImported,
-                      onSelected: (_) {
-                        setSheetState(() => _isImported = true);
-                        setState(() => _isImported = true);
-                      },
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 12),
-
-              // FPS
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('FPS de la vidéo'),
-                  if (_isImported)
-                    DropdownButton<double>(
-                      value: _fps,
-                      items: [30.0, 60.0, 120.0, 240.0]
-                          .map((v) => DropdownMenuItem(value: v, child: Text('${v.toInt()} fps')))
-                          .toList(),
-                      onChanged: (v) {
-                        setSheetState(() => _fps = v!);
-                        setState(() => _fps = v!);
-                      },
-                    )
-                  else
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: _capability?.isSlowMotion == true
-                            ? Colors.blue
-                            : Colors.grey,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        _capability?.label ?? 'Auto',
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                    ),
-                ],
-              ),
-
-              const SizedBox(height: 12),
-
-              // Calibration
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('Calibration (px/m)'),
-                      Text(
-                        '${_calibrationPx.toStringAsFixed(0)} px',
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                  Slider(
-                    value: _calibrationPx,
-                    min: 10,
-                    max: 200,
-                    divisions: 190,
-                    onChanged: (v) {
-                      setSheetState(() => _calibrationPx = v);
-                      setState(() => _calibrationPx = v);
-                    },
-                  ),
-                  const Text(
-                    'Astuce : filmez un objet de taille connue à la même distance et comptez les pixels.',
-                    style: TextStyle(fontSize: 11, color: Colors.white54),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 8),
+              CircularProgressIndicator(strokeWidth: 2),
+              SizedBox(height: 20),
+              Text('Analyse en cours…', style: TextStyle(fontSize: 18)),
+              SizedBox(height: 8),
+              Text('Détection de la balle et calcul des paramètres…',
+                  style: TextStyle(color: Colors.white54)),
             ],
           ),
-        ),
-      ),
-    );
+        );
+      case AnalysisState.done:
+        return _buildResults();
+      case AnalysisState.error:
+        return _buildError();
+    }
   }
 }
 
-// ── Widgets locaux ─────────────────────────────────────────────────────────────
-
-class _ResultCard extends StatelessWidget {
-  const _ResultCard({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.color,
-  });
-
-  final IconData icon;
+// ── Small choice chip ──
+class ChoiceChipData {
   final String label;
-  final String value;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: color.withOpacity(0.15),
-          child: Icon(icon, color: color),
-        ),
-        title: Text(label),
-        trailing: Text(
-          value,
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: color,
-          ),
-        ),
-      ),
-    );
-  }
+  final bool value;
+  const ChoiceChipData({required this.label, required this.value});
 }
 
-class _ChoiceChipWidget extends StatelessWidget {
+class _ChoiceChipItem extends StatelessWidget {
   final String label;
   final bool selected;
   final ValueChanged<bool> onSelected;
-
-  const _ChoiceChipWidget({
+  const _ChoiceChipItem({
     required this.label,
     required this.selected,
     required this.onSelected,
   });
-
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: () => onSelected(!selected),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: selected ? Theme.of(context).colorScheme.primary : Colors.white10,
+          color: selected
+              ? Theme.of(context).colorScheme.primary
+              : Colors.white10,
           border: Border.all(
             color: selected ? Theme.of(context).colorScheme.primary : Colors.white24,
           ),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(12),
         ),
         child: Text(
           label,
+          textAlign: TextAlign.center,
           style: TextStyle(
-            fontSize: 12,
+            fontSize: 13,
             color: selected ? Colors.white : Colors.white70,
             fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
           ),
@@ -756,66 +728,138 @@ class _ChoiceChipWidget extends StatelessWidget {
   }
 }
 
-class _ImportResultPreview extends StatelessWidget {
-  final VideoAnalysisResult result;
-
-  const _ImportResultPreview({required this.result});
-
+// ── Big control button ──
+class _ControlButton extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String label;
+  final VoidCallback onTap;
+  const _ControlButton({
+    required this.icon,
+    required this.color,
+    required this.label,
+    required this.onTap,
+  });
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        const Icon(Icons.check_circle, color: Colors.green, size: 48),
-        const SizedBox(height: 12),
-        _ResultCard(
-          icon: Icons.speed,
-          label: 'Vitesse',
-          value: result.ballSpeedKmh > 0
-              ? "${result.ballSpeedKmh.toStringAsFixed(1)} km/h"
-              : 'Non détectée',
-          color: Colors.orange,
+        GestureDetector(
+          onTap: onTap,
+          child: Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: color, width: 3),
+              color: Colors.black87,
+            ),
+            child: Icon(icon, color: color, size: 28),
+          ),
         ),
-        const SizedBox(height: 8),
-        _ResultCard(
-          icon: Icons.rotate_right,
-          label: 'Vitesse rotation',
-          value: result.rotationSpeedRpm > 0
-              ? "${result.rotationSpeedRpm.toStringAsFixed(0)} tr/min"
-              : 'Non détectée',
-          color: Colors.blue,
-        ),
-        const SizedBox(height: 8),
-        _ResultCard(
-          icon: Icons.architecture,
-          label: 'Angle rotation',
-          value: "${result.rotationAngleDeg.toStringAsFixed(1)}°",
-          color: Colors.green,
+        const SizedBox(height: 6),
+        Text(
+          label,
+          style: TextStyle(
+            color: color,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.5,
+          ),
         ),
       ],
     );
   }
 }
 
+// ── Result card ──
+class _ResultCard extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+  final bool fullWidth;
+  const _ResultCard({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+    this.fullWidth = false,
+  });
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      width: fullWidth ? double.infinity : null,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            theme.colorScheme.primaryContainer.withOpacity(0.2),
+            theme.colorScheme.secondaryContainer.withOpacity(0.15),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: theme.colorScheme.primary.withOpacity(0.25),
+          width: 1.5,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: color, size: 22),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(fontSize: 12, color: Colors.white60, letterSpacing: 0.5),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: color,
+                    fontSize: 24,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Aim grid painter ──
 class _AimGridPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.white.withOpacity(0.15)
+      ..color = Colors.white.withOpacity(0.12)
       ..strokeWidth = 0.5;
-
-    // Lignes de grille
     for (int i = 1; i < 3; i++) {
-      canvas.drawLine(
-          Offset(size.width * i / 3, 0), Offset(size.width * i / 3, size.height), paint);
-      canvas.drawLine(
-          Offset(0, size.height * i / 3), Offset(size.width, size.height * i / 3), paint);
+      canvas.drawLine(Offset(size.width * i / 3, 0), Offset(size.width * i / 3, size.height), paint);
+      canvas.drawLine(Offset(0, size.height * i / 3), Offset(size.width, size.height * i / 3), paint);
     }
-
-    // Zone cible (moitié supérieure, centre)
     final targetPaint = Paint()
-      ..color = Colors.amber.withOpacity(0.3)
+      ..color = Colors.amber.withOpacity(0.4)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5;
+      ..strokeWidth = 2;
     canvas.drawRect(
       Rect.fromCenter(
         center: Offset(size.width / 2, size.height * 0.3),
@@ -824,18 +868,90 @@ class _AimGridPainter extends CustomPainter {
       ),
       targetPaint,
     );
-
-    // Label zone cible
     final tp = TextPainter(
-      text: const TextSpan(
-        text: 'Zone balle',
-        style: TextStyle(color: Colors.amber, fontSize: 10),
-      ),
+      text: const TextSpan(text: 'Zone balle', style: TextStyle(color: Colors.amber, fontSize: 10)),
       textDirection: TextDirection.ltr,
-    )..layout();
+    )..layout(maxWidth: double.infinity);
     tp.paint(canvas, Offset(size.width / 2 - tp.width / 2, size.height * 0.14));
   }
 
   @override
   bool shouldRepaint(_AimGridPainter old) => false;
+}
+
+// ── Import result preview ──
+class _ImportResultPreview extends StatelessWidget {
+  final VideoAnalysisResult result;
+  const _ImportResultPreview({required this.result});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.blueGrey.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.blueGrey.withOpacity(0.3)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.check_circle, color: Colors.green, size: 20),
+                  const SizedBox(width: 8),
+                  Text('Analyse terminée',
+                      style: TextStyle(
+                          color: Colors.green,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14)),
+                ],
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Fermer', style: TextStyle(fontSize: 12)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _ResultCard(
+                  icon: Icons.speed,
+                  label: 'Vitesse',
+                  value: result.ballSpeedKmh > 0
+                      ? '${result.ballSpeedKmh.toStringAsFixed(1)} km/h'
+                      : '—',
+                  color: Colors.orange,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _ResultCard(
+                  icon: Icons.rotate_right,
+                  label: 'Rotation',
+                  value: result.rotationSpeedRpm > 0
+                      ? '${result.rotationSpeedRpm.toStringAsFixed(0)} tr/min'
+                      : '—',
+                  color: Colors.blue,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _ResultCard(
+            icon: Icons.architecture,
+            label: 'Angle',
+            value: '${result.rotationAngleDeg.toStringAsFixed(1)}°',
+            color: Colors.greenAccent,
+            fullWidth: true,
+          ),
+        ],
+      ),
+    );
+  }
 }

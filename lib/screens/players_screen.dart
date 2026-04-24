@@ -81,58 +81,85 @@ class _PlayersScreenState extends State<PlayersScreen> {
     final selected = playerProv.selectedPlayer;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Joueurs')),
+      appBar: AppBar(
+        title: const Text('Joueurs'),
+        elevation: 0,
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _showAddPlayerDialog,
         icon: const Icon(Icons.person_add),
         label: const Text('Ajouter'),
+        elevation: 4,
       ),
       body: playerProv.players.isEmpty
-          ? const Center(
-              child: Text(
-                'Aucun joueur.\nAppuyez sur + pour en ajouter un.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 16),
-              ),
-            )
+          ? _EmptyState()
           : ListView.builder(
-              padding: const EdgeInsets.only(bottom: 80),
+              padding: const EdgeInsets.only(bottom: 80, top: 8),
               itemCount: playerProv.players.length,
               itemBuilder: (context, i) {
                 final player = playerProv.players[i];
                 final isSelected = selected?.id == player.id;
                 return Card(
-                  margin:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                   color: isSelected
-                      ? Theme.of(context)
-                          .colorScheme
-                          .primaryContainer
-                          .withOpacity(0.5)
+                      ? Theme.of(context).colorScheme.primaryContainer
+                          .withOpacity(0.25)
                       : null,
                   child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
                     leading: CircleAvatar(
-                      backgroundColor:
-                          Theme.of(context).colorScheme.primaryContainer,
+                      radius: 24,
+                      backgroundColor: isSelected
+                          ? Theme.of(context).colorScheme.secondaryContainer
+                          : Theme.of(context).colorScheme.primaryContainer,
                       child: Text(
                         player.name[0].toUpperCase(),
                         style: TextStyle(
-                          color:
-                              Theme.of(context).colorScheme.onPrimaryContainer,
+                          fontSize: 20,
                           fontWeight: FontWeight.bold,
+                          color: isSelected
+                              ? Theme.of(context)
+                                  .colorScheme
+                                  .onSecondaryContainer
+                              : Theme.of(context)
+                                  .colorScheme
+                                  .onPrimaryContainer,
                         ),
                       ),
                     ),
-                    title: Text(player.name,
-                        style: const TextStyle(fontWeight: FontWeight.w600)),
-                    subtitle: Text(player.position),
+                    title: Text(
+                      player.name,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w600, fontSize: 16),
+                    ),
+                    subtitle: Text(
+                      player.position,
+                      style: const TextStyle(color: Colors.white70),
+                    ),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         if (isSelected)
-                          const Icon(Icons.check_circle, color: Colors.green),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.green.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                  color: Colors.green.withOpacity(0.5)),
+                            ),
+                            child: const Text(
+                              'ACTIF',
+                              style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.green),
+                            ),
+                          ),
                         IconButton(
-                          icon: const Icon(Icons.delete_outline),
+                          icon: const Icon(Icons.delete_outline, size: 20),
                           onPressed: () async {
                             final confirm = await showDialog<bool>(
                               context: context,
@@ -179,4 +206,34 @@ class _PlayersScreenState extends State<PlayersScreen> {
             ),
     );
   }
+}
+
+class _EmptyState extends StatelessWidget {
+  const _EmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.people_outline,
+              size: 80, color: Colors.white.withOpacity(0.3)),
+          const SizedBox(height: 20),
+          Text(
+            'Aucun joueur.',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: Colors.white54),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Appuyez sur + pour ajouter votre premier joueur',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Colors.white38),
+          ),
+        ],
+      ),
+    );
+  }
+}
 }

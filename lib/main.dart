@@ -25,12 +25,46 @@ class BaseballCoachApp extends StatelessWidget {
         title: 'Baseball Coach',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFF1A237E),
-            brightness: Brightness.dark,
+          brightness: Brightness.dark,
+          colorScheme: ColorScheme.dark(
+            primary: const Color(0xFF1976D2),
+            secondary: const Color(0xFFFF6F00),
+            surface: const Color(0xFF1E1E2E),
+            background: const Color(0xFF12121A),
           ),
           useMaterial3: true,
           fontFamily: 'Roboto',
+          cardTheme: CardTheme(
+            elevation: 2,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          ),
+          elevatedButtonTheme: ElevatedButtonThemeData(
+            style: ElevatedButton.styleFrom(
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+          outlinedButtonTheme: OutlinedButtonThemeData(
+            style: OutlinedButton.styleFrom(
+              side: const BorderSide(color: Colors.white30),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+          inputDecorationTheme: InputDecorationTheme(
+            filled: true,
+            fillColor: Colors.white08,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          ),
+          sliderTheme: SliderThemeData(
+            trackHeight: 4,
+            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
+            overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
+            activeTrackColor: const Color(0xFFFF6F00),
+            inactiveTrackColor: Colors.white10,
+          ),
         ),
         home: const HomeScreen(),
       ),

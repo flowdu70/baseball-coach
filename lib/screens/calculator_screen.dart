@@ -21,6 +21,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
   PitchResult? _result;
 
   void _calculate() {
+    HapticFeedback.lightImpact();
     setState(() {
       _result = PhysicsService.calculate(
         rotationAngleDeg: _angle,
@@ -34,13 +35,25 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
     final playerProv = context.read<PlayerProvider>();
     if (playerProv.selectedPlayer == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Sélectionnez d\'abord un joueur dans l\'onglet Joueurs')),
+        SnackBar(
+          content: const Text('Sélectionnez un joueur dans l’onglet Joueurs'),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
       );
       return;
     }
     if (_result == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Calculez d\'abord un lancer')),
+        SnackBar(
+          content: const Text('Calculez d’abord un lancer'),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
       );
       return;
     }
@@ -57,8 +70,16 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
     );
     await context.read<ThrowProvider>().addThrow(record);
     if (mounted) {
+      HapticFeedback.heavyImpact();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Lancer enregistré pour ${playerProv.selectedPlayer!.name}')),
+        SnackBar(
+          content: Text('✨ Enregistré pour ${playerProv.selectedPlayer!.name}'),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          duration: const Duration(seconds: 1),
+        ),
       );
     }
   }
@@ -70,7 +91,8 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Calculateur de lancer'),
+        title: const Text('Calculateur'),
+        elevation: 0,
         actions: [
           if (player != null)
             Padding(
@@ -78,117 +100,250 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
               child: Chip(
                 avatar: const Icon(Icons.person, size: 16),
                 label: Text(player.name),
+                backgroundColor: theme.colorScheme.secondaryContainer,
               ),
             ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // ── Sliders ──────────────────────────────────────────────────────
-            _SliderCard(
-              label: 'Vitesse de la balle',
-              value: _speed,
-              unit: 'km/h',
-              min: 60,
-              max: 165,
-              divisions: 105,
-              color: Colors.orange,
-              onChanged: (v) => setState(() => _speed = v),
-            ),
-            const SizedBox(height: 12),
-            _SliderCard(
-              label: 'Vitesse de rotation',
-              value: _spin,
-              unit: 'tr/min',
-              min: 500,
-              max: 3500,
-              divisions: 60,
-              color: Colors.blue,
-              onChanged: (v) => setState(() => _spin = v),
-            ),
-            const SizedBox(height: 12),
-            _SliderCard(
-              label: 'Angle de rotation',
-              value: _angle,
-              unit: '°',
-              min: 0,
-              max: 90,
-              divisions: 90,
-              color: Colors.green,
-              onChanged: (v) => setState(() => _angle = v),
-            ),
-            const SizedBox(height: 20),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              theme.colorScheme.background,
+              theme.colorScheme.surface,
+            ],
+          ),
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 8),
 
-            // ── Boutons ───────────────────────────────────────────────────────
+              // ── Sliders ──────────────────────────────
+              _SliderCard(
+                label: '⚡ Vitesse de la balle',
+                value: _speed,
+                unit: 'km/h',
+                min: 60,
+                max: 165,
+                divisions: 105,
+                color: theme.colorScheme.secondary,
+                onChanged: (v) => setState(() => _speed = v),
+              ),
+              const SizedBox(height: 16),
+              _SliderCard(
+                label: '🌀 Vitesse de rotation',
+                value: _spin,
+                unit: 'tr/min',
+                min: 500,
+                max: 3500,
+                divisions: 60,
+                color: theme.colorScheme.primary,
+                onChanged: (v) => setState(() => _spin = v),
+              ),
+              const SizedBox(height: 16),
+              _SliderCard(
+                label: '📐 Angle de rotation',
+                value: _angle,
+                unit: '°',
+                min: 0,
+                max: 90,
+                divisions: 90,
+                color: Colors.greenAccent,
+                onChanged: (v) => setState(() => _angle = v),
+              ),
+
+              const SizedBox(height: 28),
+
+              // ── Boutons ───────────────────────────────
+              Row(
+                children: [
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: _calculate,
+                      icon: const Icon(Icons.analytics),
+                      label: const Text('Calculer'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: theme.colorScheme.secondary,
+                        foregroundColor: Colors.black,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _saveThrow,
+                      icon: const Icon(Icons.save),
+                      label: const Text('Enregistrer'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: theme.colorScheme.secondary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              // ── Résultat ───────────────────────────────
+              if (_result != null) ...[
+                const SizedBox(height: 24),
+                _ResultCard(theme: theme, result: _result!),
+              ],
+
+              const SizedBox(height: 32),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ResultCard extends StatelessWidget {
+  final ThemeData theme;
+  final PitchResult result;
+
+  const _ResultCard({required this.theme, required this.result});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            theme.colorScheme.primaryContainer.withOpacity(0.3),
+            theme.colorScheme.secondaryContainer.withOpacity(0.2),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: theme.colorScheme.primary.withOpacity(0.3),
+          2,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
             Row(
               children: [
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: _calculate,
-                    icon: const Icon(Icons.calculate),
-                    label: const Text('Calculer'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _saveThrow,
-                    icon: const Icon(Icons.save),
-                    label: const Text('Enregistrer'),
+                Icon(Icons.psychology, color: theme.colorScheme.primary, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  'Type détecté',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: Colors.white60,
+                    letterSpacing: 1.2,
                   ),
                 ),
               ],
             ),
-
-            // ── Résultat ──────────────────────────────────────────────────────
-            if (_result != null) ...[
-              const SizedBox(height: 24),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _result!.pitchType,
-                        style: theme.textTheme.headlineSmall?.copyWith(
-                          color: theme.colorScheme.primary,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      _StatRow(
-                        icon: Icons.swap_horiz,
-                        label: 'Déviation latérale',
-                        value: '${_result!.curveEstimateCm.abs().toStringAsFixed(1)} cm',
-                        color: Colors.blue,
-                      ),
-                      _StatRow(
-                        icon: Icons.arrow_downward,
-                        label: 'Chute verticale',
-                        value: '${_result!.dropEstimateCm.abs().toStringAsFixed(1)} cm',
-                        color: Colors.red,
-                      ),
-                      const SizedBox(height: 16),
-                      SizedBox(
-                        height: 160,
-                        child: CustomPaint(
-                          painter: TrajectoryPainter(
-                            curveCm: _result!.curveEstimateCm,
-                            dropCm: _result!.dropEstimateCm,
-                          ),
-                        ),
-                      ),
-                    ],
+            const SizedBox(height: 4),
+            Text(
+              result.pitchType,
+              style: theme.textTheme.headlineMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+                color: theme.colorScheme.secondary,
+              ),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: _MiniStat(
+                    icon: Icons.speed,
+                    label: 'Vitesse',
+                    value: '${result.curveEstimateCm.abs().toStringAsFixed(1)} cm',
+                    color: Colors.orange,
+                    iconBg: Colors.orange.withOpacity(0.15),
                   ),
                 ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _MiniStat(
+                    icon: Icons.arrow_downward,
+                    label: 'Chute',
+                    value: '${result.dropEstimateCm.abs().toStringAsFixed(1)} cm',
+                    color: Colors.red,
+                    iconBg: Colors.red.withOpacity(0.15),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              height: 140,
+              child: CustomPaint(
+                painter: TrajectoryPainter(
+                  curveCm: result.curveEstimateCm,
+                  dropCm: result.dropEstimateCm,
+                ),
               ),
-            ],
+            ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _MiniStat extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+  final Color iconBg;
+
+  const _MiniStat({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+    required this.iconBg,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.canvasColor,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withOpacity(0.2), width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: iconBg,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, size: 16, color: color),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(label,
+              style: const TextStyle(
+                  fontSize: 12, color: Colors.white60, letterSpacing: 0.5)),
+          const SizedBox(height: 4),
+          Text(value,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: color,
+                fontSize: 18,
+              )),
+        ],
       ),
     );
   }

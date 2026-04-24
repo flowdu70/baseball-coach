@@ -41,8 +41,10 @@ class _PlayerDetailScreenState extends State<PlayerDetailScreen>
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.player.name),
+        elevation: 0,
         bottom: TabBar(
           controller: _tabs,
+          indicatorWeight: 3,
           tabs: const [
             Tab(icon: Icon(Icons.list), text: 'Lancers'),
             Tab(icon: Icon(Icons.bar_chart), text: 'Stats'),
@@ -116,7 +118,17 @@ class _StatsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (throws.isEmpty) {
-      return const Center(child: Text('Pas encore de données'));
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.bar_chart, size: 64, color: Colors.white24),
+            SizedBox(height: 16),
+            Text('Aucune donnée à afficher',
+                style: TextStyle(color: Colors.white54, fontSize: 16)),
+          ],
+        ),
+      );
     }
 
     final recent = throws.take(20).toList().reversed.toList();
@@ -192,26 +204,56 @@ class _StatsTab extends StatelessWidget {
           const SizedBox(height: 24),
           Text('Répartition des lancers',
               style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
-          ...distribution.entries.map((e) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(
-                  children: [
-                    Expanded(child: Text(e.key)),
-                    Text('${e.value}',
-                        style: const TextStyle(fontWeight: FontWeight.bold)),
-                    const SizedBox(width: 8),
-                    SizedBox(
-                      width: 100,
+          const SizedBox(height: 12),
+          ...distribution.entries.map((e) {
+            final pct = (e.value / throws.length * 100).toStringAsFixed(0);
+            return Container(
+              margin: const EdgeInsets.symmetric(vertical: 4),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white05,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.white10),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      e.key,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  Text(
+                    '(${pct}%)',
+                    style: const TextStyle(color: Colors.white54, fontSize: 12),
+                  ),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 80,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
                       child: LinearProgressIndicator(
                         value: e.value / throws.length,
-                        minHeight: 8,
-                        borderRadius: BorderRadius.circular(4),
+                        minHeight: 6,
+                        backgroundColor: Colors.white15,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          Theme.of(context).colorScheme.secondary,
+                        ),
                       ),
                     ),
-                  ],
-                ),
-              )),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '${e.value}',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                        color: Colors.white70),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
         ],
       ),
     );
@@ -227,28 +269,96 @@ class _AdviceTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (advices.isEmpty) {
-      return const Center(
-          child: Text('Enregistrez des lancers pour obtenir des conseils'));
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.lightbulb_outline,
+                size: 64,
+                color: Colors.white.withOpacity(0.25)),
+            const SizedBox(height: 20),
+            Text(
+              'Aucun conseil pour le moment.',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: Colors.white54,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Enregistrez au moins 5 lancers pour obtenir une analyse.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white38, fontSize: 14),
+            ),
+          ],
+        ),
+      );
     }
     return ListView.separated(
       padding: const EdgeInsets.all(16),
       itemCount: advices.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      separatorBuilder: (_, __) => const SizedBox(height: 16),
       itemBuilder: (_, i) {
         final a = advices[i];
+        final color = a.emoji == '⚡' || a.emoji == '🎯'
+            ? Colors.orange
+            : a.emoji == '🌀' || a.emoji == '✅'
+                ? Colors.green
+                : a.emoji == '📐' || a.emoji == '↔️'
+                    ? Colors.cyan
+                    : Colors.blue;
         return Card(
-          child: ListTile(
-            leading: Text(a.emoji, style: const TextStyle(fontSize: 28)),
-            title: Text(a.title,
-                style: const TextStyle(fontWeight: FontWeight.bold)),
-            subtitle: Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(a.detail),
+          elevation: 2,
+          color: color.withOpacity(0.08),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: color.withOpacity(0.25), width: 1.5),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    a.emoji,
+                    style: const TextStyle(fontSize: 22),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        a.title,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        a.detail,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Colors.white70,
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-            isThreeLine: true,
           ),
         );
       },
     );
+  }
   }
 }
