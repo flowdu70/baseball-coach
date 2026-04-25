@@ -20,7 +20,8 @@ android {
 
     defaultConfig {
         applicationId "com.example.baseball_coach"
-        minSdk flutter.minSdkVersion
+        // Override Flutter's minSdkVersion to satisfy plugin requirements (ffmpeg_kit_flutter_new needs API 24+)
+        minSdkVersion 24
         targetSdk flutter.targetSdkVersion
         versionCode 1
         versionName "1.0.0"
