@@ -4,7 +4,7 @@ import 'screens/home_screen.dart';
 import 'providers/player_provider.dart';
 import 'providers/throw_provider.dart';
 import 'services/database_service.dart';
-import 'package:ffmpeg_kit_flutter/ffmpeg_kit.dart';
+
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -31,7 +31,7 @@ class BaseballCoachApp extends StatelessWidget {
             primary: const Color(0xFF1976D2),
             secondary: const Color(0xFFFF6F00),
             surface: const Color(0xFF1E1E2E),
-            background: const Color(0xFF12121A),
+
           ),
           useMaterial3: true,
           fontFamily: 'Roboto',

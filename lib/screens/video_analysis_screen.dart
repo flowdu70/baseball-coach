@@ -392,7 +392,7 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
       builder: (_) => StatefulBuilder(
         builder: (ctx, setSheetState) => Container(
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.25),
+            color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.25),
             borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
           ),
           child: Padding(

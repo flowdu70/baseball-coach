@@ -99,7 +99,6 @@ class VideoAnalysisService {
 
     // Créer un dossier temporaire pour les frames
     final tempDir = await getTemporaryDirectory();
-    if (tempDir == null) return [];
     final outputPattern = p.join(tempDir.path, 'frame_%04d.png');
 
     // Calculer le fps d'extraction: on extrait au fps cible (max 30 pour la performance)
